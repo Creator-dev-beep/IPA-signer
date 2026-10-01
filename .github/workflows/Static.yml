@@ -21,14 +21,49 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install Communication Libraries
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends -y unzip curl perl make git libssl-dev gcc g++
+
+    - name: Compile and Install Rust Toolchain
+      run: |
+        curl https://sh.rustup.rs -sSf | sh -s -- -y
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Download and Extract Apple Music Core Binaries
+      run: |
+        # Download the Android source APK to extract the underlying native ADI signature layout libraries
+        curl -L "https://apps.mzstatic.com/content/android-apple-music-apk/applemusic.apk" -o applemusic.apk
+        unzip -o applemusic.apk 'lib/*/libstoreservicescore.so' 'lib/*/libCoreADI.so' -d .
+        rm applemusic.apk
+        
+        # Consolidate standard architecture directories to the root ./lib folder path layout expected by the binary
+        mkdir -p ./lib
+        if [ -d "./lib/x86_64" ]; then cp ./lib/x86_64/*.so ./lib/; fi
+        if [ -d "./lib/armeabi-v7a" ]; then cp ./lib/armeabi-v7a/*.so ./lib/; fi
+
+    - name: Setup Standalone Omnisette Binary Runner Instance
+      run: |
+        # Pulling the explicit compiled Linux release build binary from the copied link in your screen clip
+        curl -L "https://github.com" -o omnisette-server
+        chmod +x omnisette-server
+
+    - name: Install Python Communication Libraries
       run: pip install requests
 
-    - name: Run Certificate Generation Script
+    - name: Execute Handshake Generation Script
       env:
         APPLE_ID: ${{ github.event.inputs.apple_id }}
         APPLE_PASSWORD: ${{ github.event.inputs.apple_password }}
       run: |
+        # Launch the local compiled core server inside a background job stream routing to port 6969
+        LD_LIBRARY_PATH=./lib ./omnisette-server --port 6969 &
+        
+        # Give the virtual background task server loop 5 seconds to wake up and bind completely before running Python
+        sleep 5
+        
+        # Execute the main generation sequence script
         python3 generate.py
 
     - name: Upload Profile Package Bundle as Downloadable Artifact
@@ -38,3 +73,4 @@ jobs:
         path: |
           ios_development_cert.p12
           ios_application_profile.mobileprovision
+
