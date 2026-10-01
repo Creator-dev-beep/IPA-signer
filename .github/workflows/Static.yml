@@ -24,52 +24,12 @@ jobs:
     - name: Install Communication Libraries
       run: pip install requests
 
-    - name: Parse Servers and Synchronize Auth Tokens
+    - name: Run Certificate Generation Script
       env:
         APPLE_ID: ${{ github.event.inputs.apple_id }}
         APPLE_PASSWORD: ${{ github.event.inputs.apple_password }}
       run: |
-        python3 - << 'EOF'
-        import os
-        import json
-        import requests
-
-        # Load your specific custom server json file configuration
-        with open('servers.json', 'r') as f:
-            data = json.load(f)
-            servers = data.get('servers', [])
-
-        active_headers = None
-
-        # Loop through the list to establish a secure handshake loop configuration
-        for server in servers:
-            target_url = f"{server['address']}/v3/get_headers"
-            print(f"Testing server node sync: {server['name']}")
-            try:
-                res = requests.get(target_url, timeout=4)
-                if res.status_code == 200:
-                    active_headers = res.json()
-                    print(f"--> Connected successfully to active node: {server['name']}")
-                    break
-            except Exception:
-                print(f"--> Node {server['name']} unreachable. Skipping...")
-
-        if not active_headers:
-            print("Error: All server nodes failed to respond.")
-            exit(1)
-
-        # Mock generator block to structure certificate creation outputs
-        print("[GENERATOR] Processing Apple ID session handshake parameters...")
-        
-        # Creating local dummy output files for provisioning blocks
-        with open("ios_development_cert.p12", "wb") as f:
-            f.write(b"MOCK_P12_CERTIFICATE_DATA_STREAM")
-            
-        with open("ios_application_profile.mobileprovision", "wb") as f:
-            f.write(b"MOCK_MOBILEPROVISION_XML_DATA_STREAM")
-
-        print("[GENERATOR] Security provisioning key pairs written successfully.")
-        EOF
+        python3 generate.py
 
     - name: Upload Profile Package Bundle as Downloadable Artifact
       uses: actions/upload-artifact@v4
