@@ -10,52 +10,25 @@ on:
 
 jobs:
   compile_and_generate:
-    # Use a matrix strategy to test across Ubuntu Linux, macOS, and Windows runners if desired
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Code Workspace Files
       uses: actions/checkout@v4
 
-    - name: Set up Python Environment Environment
+    - name: Set up Python Environment
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    - name: Install System Compilation Package Layer
+    - name: Fetch and Unpack Apple Music Core Components
       run: |
-        sudo apt-get update
-        sudo apt-get install --no-install-recommends -y unzip curl perl make git libssl-dev gcc g++
-
-    - name: Initialize Stable Rust Toolchain
-      run: |
-        curl https://rustup.rs -sSf | sh -s -- -y
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-    - name: Clone Omnisette Server Source Files
-      run: |
-        rm -rf omnisette-server
-        git clone https://github.com
-
-    - name: Build Omnisette Server From Source via Cargo
-      run: |
-        cd omnisette-server
-        source "$HOME/.cargo/env" || true
-        cargo build --release
-        # Move the newly compiled binary asset into the main root workspace folder
-        cp target/release/omnisette-server ../
-        cd ..
-
-    - name: Fetch and Unpack Apple Music Native Core Components
-      run: |
+        # Download the stable production apk payload to pull library segments
         curl -L "https://mzstatic.com" -o applemusic.apk
         unzip -o applemusic.apk 'lib/*/libstoreservicescore.so' 'lib/*/libCoreADI.so' -d .
         rm applemusic.apk
         
-        # Structure the target library directory path environment expected by the compiled rust binary
+        # Structure the target library directories path environment expected by the system runtime
         mkdir -p ./lib
         if [ -d "./lib/x86_64" ]; then cp ./lib/x86_64/*.so ./lib/; fi
         if [ -d "./lib/armeabi-v7a" ]; then cp ./lib/armeabi-v7a/*.so ./lib/; fi
@@ -63,22 +36,12 @@ jobs:
     - name: Install Python Package Dependencies
       run: pip install requests
 
-    - name: Launch Local Server and Run Generator Script
+    - name: Execute Handshake Generation Script
       env:
         APPLE_ID: ${{ github.event.inputs.apple_id }}
         APPLE_PASSWORD: ${{ github.event.inputs.apple_password }}
       run: |
-        echo "[SERVER] Starting compiled binary behind a background task daemon..."
-        chmod +x ./omnisette-server
-        LD_LIBRARY_PATH=./lib ./omnisette-server --port 6969 &
-        
-        # Give the compiled project executable server 8 seconds to fully bind its internal sockets
-        sleep 8
-        
-        echo "[SERVER] Checking localized port availability:"
-        curl -s http://127.0.0 || echo "Warning: Port handshake delayed."
-        
-        # Run your main script
+        # Execute the dynamic local sweep script
         python3 generate.py
 
     - name: Upload Profile Package Bundle as Downloadable Artifact
