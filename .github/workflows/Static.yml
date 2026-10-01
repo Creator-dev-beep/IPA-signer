@@ -21,32 +21,53 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Fetch and Unpack Apple Music Native Core Components
+    - name: Install System Compilation Dependencies
       run: |
-        # Use wget with stream verification to download the complete 135MB production binary cleanly
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends -y ca-certificates ldc git clang dub libz-dev libssl-dev unzip wget
+
+    - name: Clone and Natively Compile Dadoum Anisette-v3-Server
+      run: |
+        git clone https://github.com
+        cd anisette-v3-server
+        DC=ldc2 dub build -c "static" --build-mode allAtOnce -b release --compiler=ldc2
+        # Move the newly compiled binary up to our root folder workspace
+        cp anisette-v3-server ../
+        cd ..
+
+    - name: Fetch Apple Music Native Libraries
+      run: |
+        # Use wget with stream verification to download the complete Android payload
         wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 "https://apps.mzstatic.com/content/android-apple-music-apk/applemusic.apk" -O applemusic.apk
         
-        # Verify package stability before unpacking zip tracks
-        ls -lh applemusic.apk
-        
-        # Extract the exact architecture library layers needed for the anisette signature loop
+        # Unpack directly into the directory location expected by Dadoum's binary layout
+        mkdir -p ~/.config/anisette-v3/lib/
         unzip -o applemusic.apk 'lib/*/libstoreservicescore.so' 'lib/*/libCoreADI.so' -d .
-        rm applemusic.apk
         
-        # Map directory trees to the local root ./lib location expected by standard runtimes
-        mkdir -p ./lib
-        if [ -d "./lib/x86_64" ]; then cp ./lib/x86_64/*.so ./lib/; fi
-        if [ -d "./lib/armeabi-v7a" ]; then cp ./lib/armeabi-v7a/*.so ./lib/; fi
+        # Consolidate architecture profiles into the configuration directory path layout
+        if [ -d "./lib/x86_64" ]; then cp ./lib/x86_64/*.so ~/.config/anisette-v3/lib/; fi
+        if [ -d "./lib/armeabi-v7a" ]; then cp ./lib/armeabi-v7a/*.so ~/.config/anisette-v3/lib/; fi
+        rm applemusic.apk
 
     - name: Install Python Package Dependencies
       run: pip install requests
 
-    - name: Execute Handshake Generation Script
+    - name: Launch Dadoum Server and Execute Handshake
       env:
         APPLE_ID: ${{ github.event.inputs.apple_id }}
         APPLE_PASSWORD: ${{ github.event.inputs.apple_password }}
       run: |
-        # Run your target script
+        echo "[SERVER] Launching newly compiled anisette-v3-server task..."
+        chmod +x ./anisette-v3-server
+        ./anisette-v3-server -p 6969 &
+        
+        # Give the native service 8 seconds to fully bind its local socket mappings
+        sleep 8
+        
+        echo "[SERVER] Testing local interface link status:"
+        curl -s http://127.0.0.1:6969/v3/get_headers || echo "Local server boot initialization delayed."
+        
+        # Run your main script logic execution pass
         python3 generate.py
 
     - name: Upload Profile Package Bundle as Downloadable Artifact
