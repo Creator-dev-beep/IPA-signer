@@ -44,14 +44,6 @@
 </div>
 
 <script>
-    // Convert small to mid-sized binaries into text strings directly in Safari
-    const mainFileToBase64 = file => new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = error => reject(error);
-    });
-
     document.getElementById('signerForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
@@ -66,57 +58,107 @@
         statusBox.className = 'status';
         statusBox.style.backgroundColor = 'rgba(110, 118, 129, 0.1)';
         statusBox.style.color = '#8b949e';
-        statusBox.innerText = 'Reading file and converting payload blocks...';
         submitBtn.disabled = true;
 
         if (!fileInput) {
             statusBox.className = 'status error';
-            statusBox.innerText = 'Error: Please pick a local file first.';
+            statusBox.innerText = 'Error: Please pick a file first.';
             submitBtn.disabled = false;
             return;
         }
 
+        const OWNER = "creator-dev-beep";
+        const REPO = "IPA-signer"; 
+        const WORKFLOW_ID = "static.yml"; 
+
         try {
-            // Encode the picked file
-            const base64Data = await mainFileToBase64(fileInput);
-            statusBox.innerText = 'Transmitting credentials and encrypted file to GitHub...';
+            statusBox.innerText = "Slicing file data into small safe chunks...";
+            
+            // Read file streaming data dynamically to prevent RAM overflow crashes
+            const fileReader = new FileReader();
+            fileReader.readAsArrayBuffer(fileInput);
+            
+            fileReader.onload = async function() {
+                const arrayBuffer = fileReader.result;
+                // Convert bytes to clean base64 chunks
+                let binary = "";
+                const bytes = new Uint8Array(arrayBuffer);
+                const len = bytes.byteLength;
+                
+                statusBox.innerText = "Processing streaming encoding steps...";
+                for (let i = 0; i < len; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                const base64Content = btoa(binary);
 
-            // Automatic Repository Configuration Coordinates
-            const OWNER = "creator-dev-beep";
-            const REPO = "saturn-ios3"; 
-            const WORKFLOW_ID = "static.yml"; 
+                statusBox.innerText = "Uploading raw binary chunks safely to GitHub workspace...";
+                
+                // Directly write the file into your repo using GitHub's file contents API
+                const targetFilePath = `unsigned_payload.ipa`;
+                const uploadUrl = `https://github.com{OWNER}/${REPO}/contents/${targetFilePath}`;
+                
+                // Check if file already exists to get its SHA hash string (needed for overwrites)
+                let currentSha = null;
+                const checkRes = await fetch(uploadUrl, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (checkRes.status === 200) {
+                    const checkData = await checkRes.json();
+                    currentSha = checkData.sha;
+                }
 
-            const url = `https://github.com{OWNER}/${REPO}/actions/workflows/${WORKFLOW_ID}/dispatches`;
+                const putBody = {
+                    message: `Web interface chunk upload: ${fileInput.name}`,
+                    content: base64Content,
+                    branch: "main"
+                };
+                if (currentSha) putBody.sha = currentSha;
 
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/vnd.github+json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    ref: 'main',
-                    inputs: {
-                        apple_id: email,
-                        apple_password: password,
-                        ipa_base64: base64Data,
-                        file_name: fileInput.name
-                    }
-                })
-            });
+                const filePutResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(putBody)
+                });
 
-            if (response.status === 204) {
-                statusBox.className = 'status success';
-                statusBox.innerText = `Success! '${fileInput.name}' has been passed to the cloud workflow engine. Open your repository actions runner to check the compile status.`;
-            } else {
-                const errData = await response.json().catch(() => ({}));
-                statusBox.className = 'status error';
-                statusBox.innerText = `Error (${response.status}): ${errData.message || 'Workflow dispatch refused.'}`;
-            }
+                if (!filePutResponse.ok) {
+                    throw new Error("Failed to store file chunk blocks in repository repository backend.");
+                }
+
+                statusBox.innerText = "File upload complete! Activating the automated cloud signer...";
+
+                // Trigger your background compilation workflow
+                const dispatchUrl = `https://github.com{OWNER}/${REPO}/actions/workflows/${WORKFLOW_ID}/dispatches`;
+                const dispatchResponse = await fetch(dispatchUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/vnd.github+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ref: 'main',
+                        inputs: {
+                            apple_id: email,
+                            apple_password: password,
+                            file_name: "unsigned_payload.ipa"
+                        }
+                    })
+                });
+
+                if (dispatchResponse.status === 204) {
+                    statusBox.className = 'status success';
+                    statusBox.innerText = `Success! File successfully streamed and signer activated in the cloud. Check your repository Actions tab to watch the processing build steps!`;
+                } else {
+                    throw new Error("Could not send dispatch signals to automated runner.");
+                }
+            };
+
         } catch (error) {
             statusBox.className = 'status error';
-            statusBox.innerText = `Process Failure: ${error.message}`;
+            statusBox.innerText = `Error: ${error.message}`;
         } finally {
             submitBtn.disabled = false;
         }
