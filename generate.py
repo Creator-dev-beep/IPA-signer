@@ -1,9 +1,8 @@
 import os
 import sys
-import json
+import socket
 import requests
 
-# Production Anisette Server Network Infrastructure Registry
 SERVER_DATA = {
     "servers": [
         {"name": "SideStore", "address": "https://sidestore.io"},
@@ -24,8 +23,35 @@ SERVER_DATA = {
     ]
 }
 
+def detect_device_loopback_ip():
+    """
+    Scans the device network sockets to find the active internal gateway or 
+    loopback adapter IP address (works inside GitHub, iSH shell, or a-Shell).
+    """
+    print("[NETWORK] Analyzing iPad / environment network interface loops...")
+    # Default fallback matrix addresses
+    detected_ips = ["127.0.0.1", "10.0.2.2", "localhost"]
+    
+    try:
+        # Create a dummy socket connection to a public address to read the device's own internal IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        
+        # If we are inside an iSH network container, we grab the default virtual gateway segment
+        if local_ip.startswith("10.0.2."):
+            detected_ips.insert(0, "10.0.2.2")
+        elif local_ip and local_ip != "0.0.0.0":
+            detected_ips.insert(0, local_ip)
+            
+        print(f"--> Primary local subnet interface detected: {local_ip}")
+    except Exception:
+        print("--> Using default local fallback loopback adapters.")
+        
+    return list(dict.fromkeys(detected_ips)) # Remove duplicates safely
+
 def fetch_anisette_headers():
-    """Sweeps all external nodes, and falls back to our container on port 6969 if they fail."""
     custom_headers = {
         "User-Agent": "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
         "Accept": "application/json"
@@ -43,21 +69,24 @@ def fetch_anisette_headers():
         except Exception:
             continue
 
-    # 2. SEAMLESS FALLBACK: Route locally into our active Docker background container instance
-    print("\n[WARNING] Public node layers unreachable. Connecting to local Docker server on port 6969...")
-    try:
-        # Corrected the loopback formatting from '127.0.0' to standard '127.0.0.1' address map
-        local_res = requests.get("http://127.0.0", timeout=8)
-        if local_res.status_code == 200:
-            print("--> [SUCCESS] Local Docker container answered. Synchronized headers.")
-            return local_res.json()
-    except Exception as err:
-        print(f"--> Local container fallback bridge connection failed: {err}")
+    # 2. LOCAL BRIDGING: Scan detected internal loopback addresses dynamically on port 6969
+    print("\n[WARNING] Public node layers unreachable. Initializing local adapter sweep matrix...")
+    loopback_targets = detect_device_loopback_ip()
+    
+    for ip in loopback_targets:
+        local_url = f"http://{ip}:6969/v3/get_headers"
+        print(f"Scanning target loopback server map: {local_url}...")
+        try:
+            local_res = requests.get(local_url, timeout=4)
+            if local_res.status_code == 200:
+                print(f"--> [SUCCESS] Local self-hosted server found at {ip}! Headers synchronized.")
+                return local_res.json()
+        except Exception:
+            continue
         
     return None
 
 def authenticate_apple_id(apple_id, password, anisette_headers):
-    """Executes a profile authentication handshake with Apple's secure login servers."""
     print(f"[APPLE-API] Transmitting payloads to Apple Grandparent servers for account: {apple_id}...")
     
     apple_auth_headers = {
@@ -109,13 +138,12 @@ def main():
         
     anisette_data = fetch_anisette_headers()
     if not anisette_data:
-        print("\n[FATAL] Both public and self-hosted container blocks failed to initialize.")
+        print("\n[FATAL] Both public and local loopback server networks failed to respond.")
         sys.exit(1)
         
     session_profile = authenticate_apple_id(apple_id, apple_password, anisette_data)
     print("\n[APPLE-API] Profile session token mapped successfully. Handshake initialized.")
     
-    # Export provisioning files cleanly directly into your execution workspace paths
     workspace_dir = os.getcwd()
     with open(os.path.join(workspace_dir, "ios_development_cert.p12"), "w") as f:
         f.write(f"PRODUCTION_P12_KEY_SET_FOR_{apple_id}")
