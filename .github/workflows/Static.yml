@@ -38,7 +38,7 @@ jobs:
     - name: Fetch Apple Music Native Libraries
       run: |
         # Use wget with stream verification to download the complete Android payload
-        wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 "https://apps.mzstatic.com/content/android-apple-music-apk/applemusic.apk" -O applemusic.apk
+        wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 "https://mzstatic.com" -O applemusic.apk
         
         # Unpack directly into the directory location expected by Dadoum's binary layout
         mkdir -p ~/.config/anisette-v3/lib/
@@ -65,7 +65,7 @@ jobs:
         sleep 8
         
         echo "[SERVER] Testing local interface link status:"
-        curl -s http://127.0.0.1:6969/v3/get_headers || echo "Local server boot initialization delayed."
+        curl -s http://127.0.0 || echo "Local server boot initialization delayed."
         
         # Run your main script logic execution pass
         python3 generate.py
