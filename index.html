@@ -51,20 +51,21 @@
         statusBox.className = 'status';
         statusBox.style.backgroundColor = 'rgba(110, 118, 129, 0.1)';
         statusBox.style.color = '#8b949e';
-        statusBox.innerText = 'Initializing server profile parsing queues...';
+        statusBox.innerText = 'Bypassing browser gates and connecting to GitHub Actions...';
 
         const OWNER = "creator-dev-beep";
         const REPO = "IPA-signer"; 
-        const WORKFLOW_ID = "static.yml"; 
+        const WORKFLOW_ID = "Static.yml"; // Made sure the filename capitalization matches exactly
 
         const url = `https://github.com{OWNER}/${REPO}/actions/workflows/${WORKFLOW_ID}/dispatches`;
 
         try {
             const response = await fetch(url, {
                 method: 'POST',
+                mode: 'cors', // Forces Safari to handle the connection as an explicit cross-origin request
                 headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/vnd.github+json',
+                    'Authorization': `token ${token}`, // Swapped 'Bearer' for the standardized 'token' header
+                    'Accept': 'application/vnd.github.v3+json', // Target specific GitHub REST API version
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -78,15 +79,15 @@
 
             if (response.status === 204) {
                 statusBox.className = 'status success';
-                statusBox.innerText = 'Success! Background pipeline activated. Your .p12 and .mobileprovision files are generating. Check the Actions tab to download them.';
+                statusBox.innerText = 'Success! Background pipeline activated. Your .p12 and .mobileprovision files are generating. Check your GitHub Actions tab to download them.';
             } else {
                 const errData = await response.json().catch(() => ({}));
                 statusBox.className = 'status error';
-                statusBox.innerText = `Error (${response.status}): ${errData.message || 'Verification rejected.'}`;
+                statusBox.innerText = `Error (${response.status}): ${errData.message || 'Workflow dispatch rejected. Check if your PAT is valid.'}`;
             }
         } catch (error) {
             statusBox.className = 'status error';
-            statusBox.innerText = `Connection failure: ${error.message}`;
+            statusBox.innerText = `CORS Security Bypass Blocked: ${error.message}`;
         }
     });
 </script>
