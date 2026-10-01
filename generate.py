@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import socket
 import requests
 
@@ -24,32 +25,17 @@ SERVER_DATA = {
 }
 
 def detect_device_loopback_ip():
-    """
-    Scans the device network sockets to find the active internal gateway or 
-    loopback adapter IP address (works inside GitHub, iSH shell, or a-Shell).
-    """
-    print("[NETWORK] Analyzing iPad / environment network interface loops...")
-    # Default fallback matrix addresses
-    detected_ips = ["127.0.0.1", "10.0.2.2", "localhost"]
-    
+    detected_ips = ["127.0.0.1", "localhost", "10.0.2.2"]
     try:
-        # Create a dummy socket connection to a public address to read the device's own internal IP
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         local_ip = s.getsockname()[0]
         s.close()
-        
-        # If we are inside an iSH network container, we grab the default virtual gateway segment
-        if local_ip.startswith("10.0.2."):
-            detected_ips.insert(0, "10.0.2.2")
-        elif local_ip and local_ip != "0.0.0.0":
+        if local_ip and local_ip != "0.0.0.0":
             detected_ips.insert(0, local_ip)
-            
-        print(f"--> Primary local subnet interface detected: {local_ip}")
     except Exception:
-        print("--> Using default local fallback loopback adapters.")
-        
-    return list(dict.fromkeys(detected_ips)) # Remove duplicates safely
+        pass
+    return list(dict.fromkeys(detected_ips))
 
 def fetch_anisette_headers():
     custom_headers = {
@@ -63,14 +49,14 @@ def fetch_anisette_headers():
         print(f"Testing public node: {server['name']}...")
         try:
             res = requests.get(target_url, headers=custom_headers, timeout=5)
-            if res.status_code == 200:
+            if res.status_code == 200 and "X-Apple-I-MD" in res.text:
                 print(f"--> [ONLINE] Paired successfully with node: {server['name']}")
-                return res.json()
+                return res.json() # Immediately return data and skip looking for loopbacks!
         except Exception:
             continue
 
-    # 2. LOCAL BRIDGING: Scan detected internal loopback addresses dynamically on port 6969
-    print("\n[WARNING] Public node layers unreachable. Initializing local adapter sweep matrix...")
+    # 2. LOCAL BRIDGING FALLBACK: Scan locally compiled dadoum instance on port 6969
+    print("\n[WARNING] Public node layers unreachable or blocked. Scanning locally compiled server...")
     loopback_targets = detect_device_loopback_ip()
     
     for ip in loopback_targets:
@@ -79,7 +65,7 @@ def fetch_anisette_headers():
         try:
             local_res = requests.get(local_url, timeout=4)
             if local_res.status_code == 200:
-                print(f"--> [SUCCESS] Local self-hosted server found at {ip}! Headers synchronized.")
+                print(f"--> [SUCCESS] Locally compiled anisette-v3-server found at {ip}!")
                 return local_res.json()
         except Exception:
             continue
@@ -117,7 +103,8 @@ def authenticate_apple_id(apple_id, password, anisette_headers):
             timeout=15
         )
         
-        if response.status_code == 409:
+        # Catch and alert if an App-Specific Password or 2FA code is needed
+        if response.status_code == 409 or "verification" in response.text.lower():
             print("\n[ALERT] Security challenge encountered. App-Specific Password verification required.")
             print("[INFO] Please create an App-Specific password on ://apple.com and use that to pass verification.")
             sys.exit(1)
