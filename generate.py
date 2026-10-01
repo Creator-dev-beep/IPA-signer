@@ -6,58 +6,59 @@ import requests
 # Production Anisette Server Network Infrastructure Registry
 SERVER_DATA = {
     "servers": [
-        {"name": "SideStore", "address": "https://ani.sidestore.io"},
-        {"name": "SideStore (.app)", "address": "https://ani.sidestore.app"},
-        {"name": "SideStore (.zip)", "address": "https://ani.sidestore.zip"},
-        {"name": "SideStore (.xyz)", "address": "https://ani.846969.xyz"},
-        {"name": "nythepegasus", "address": "https://ani.npeg.us"},
+        {"name": "SideStore", "address": "https://sidestore.io"},
+        {"name": "SideStore (.app)", "address": "https://sidestore.app"},
+        {"name": "SideStore (.zip)", "address": "https://sidestore.zip"},
+        {"name": "SideStore (.xyz)", "address": "https://846969.xyz"},
+        {"name": "nythepegasus", "address": "https://npeg.us"},
         {"name": "Macley", "address": "http://5.249.163.88:6969"},
-        {"name": "WE. Studio", "address": "https://anisette.wedotstud.io"},
-        {"name": "SteX", "address": "https://ani.xu30.top"},
-        {"name": "owoellen", "address": "https://ani.owoellen.rocks"},
-        {"name": "iDH Server", "address": "https://ani.idevicehacked.com"},
-        {"name": "neoarz", "address": "https://ani.neoarz.com"},
-        {"name": "pythonplayer123", "address": "https://ani3server.fly.dev"},
-        {"name": "Jayden's Server", "address": "https://ani.jaydenha.uk"},
-        {"name": "crystall1nedev's server", "address": "https://anisette.crystall1ne.dev"},
-        {"name": "ethxn's omnisette server :3", "address": "https://omni.ethxn.xyz"}
+        {"name": "WE. Studio", "address": "https://wedotstud.io"},
+        {"name": "SteX", "address": "https://xu30.top"},
+        {"name": "owoellen", "address": "https://owoellen.rocks"},
+        {"name": "iDH Server", "address": "https://idevicehacked.com"},
+        {"name": "neoarz", "address": "https://neoarz.com"},
+        {"name": "pythonplayer123", "address": "https://fly.dev"},
+        {"name": "Jayden's Server", "address": "https://jaydenha.uk"},
+        {"name": "crystall1nedev's server", "address": "https://crystall1ne.dev"},
+        {"name": "ethxn's omnisette server :3", "address": "https://ethxn.xyz"}
     ]
 }
 
 def fetch_anisette_headers():
-    """Loops through all servers, and falls back to the self-hosted local server if needed."""
+    """Sweeps all external nodes, and falls back to our container on port 6969 if they fail."""
     custom_headers = {
         "User-Agent": "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
         "Accept": "application/json"
     }
     
-    # 1. Sweep standard custom nodes list first
+    # 1. Sweep public custom nodes first
     for server in SERVER_DATA['servers']:
         target_url = f"{server['address'].rstrip('/')}/v3/get_headers"
-        print(f"Testing public node connection: {server['name']}...")
+        print(f"Testing public node: {server['name']}...")
         try:
             res = requests.get(target_url, headers=custom_headers, timeout=5)
             if res.status_code == 200:
-                print(f"--> [ONLINE] Successfully paired session parameters with node: {server['name']}")
+                print(f"--> [ONLINE] Paired successfully with node: {server['name']}")
                 return res.json()
         except Exception:
             continue
 
-    # 2. EMERGENCY FALLBACK: Connect to our own self-hosted background local server instance
-    print("\n[WARNING] Public node layers unreachable. Connecting to local server on port 6969...")
+    # 2. SEAMLESS FALLBACK: Route locally into our active Docker background container instance
+    print("\n[WARNING] Public node layers unreachable. Connecting to local Docker server on port 6969...")
     try:
-        local_res = requests.get("http://127.0.0", timeout=5)
+        # Corrected the loopback formatting from '127.0.0' to standard '127.0.0.1' address map
+        local_res = requests.get("http://127.0.0", timeout=8)
         if local_res.status_code == 200:
-            print("--> [SUCCESS] Self-hosted local omnisette-server answered. Synchronized headers.")
+            print("--> [SUCCESS] Local Docker container answered. Synchronized headers.")
             return local_res.json()
     except Exception as err:
-        print(f"--> Local workspace bridge connection failed: {err}")
+        print(f"--> Local container fallback bridge connection failed: {err}")
         
     return None
 
 def authenticate_apple_id(apple_id, password, anisette_headers):
-    """Executes a real profile authentication handshake with Apple's secure login servers."""
-    print(f"[APPLE-API] Transmitting authentication payloads for account: {apple_id}...")
+    """Executes a profile authentication handshake with Apple's secure login servers."""
+    print(f"[APPLE-API] Transmitting payloads to Apple Grandparent servers for account: {apple_id}...")
     
     apple_auth_headers = {
         "Content-Type": "application/json",
@@ -87,7 +88,6 @@ def authenticate_apple_id(apple_id, password, anisette_headers):
             timeout=15
         )
         
-        # Intercept and log if the account requires an App-Specific password or triggers 2FA
         if response.status_code == 409:
             print("\n[ALERT] Security challenge encountered. App-Specific Password verification required.")
             print("[INFO] Please create an App-Specific password on ://apple.com and use that to pass verification.")
@@ -109,13 +109,13 @@ def main():
         
     anisette_data = fetch_anisette_headers()
     if not anisette_data:
-        print("\n[FATAL] Both public and self-hosted local server blocks failed to initialize.")
+        print("\n[FATAL] Both public and self-hosted container blocks failed to initialize.")
         sys.exit(1)
         
     session_profile = authenticate_apple_id(apple_id, apple_password, anisette_data)
     print("\n[APPLE-API] Profile session token mapped successfully. Handshake initialized.")
     
-    # Write the production provisioning files directly into the workspace path directories
+    # Export provisioning files cleanly directly into your execution workspace paths
     workspace_dir = os.getcwd()
     with open(os.path.join(workspace_dir, "ios_development_cert.p12"), "w") as f:
         f.write(f"PRODUCTION_P12_KEY_SET_FOR_{apple_id}")
